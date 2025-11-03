@@ -1,0 +1,8 @@
+Field,Value
+Common Name (CN),R13 
+Issuer,ISRG Root X1 (Internet Security Research Group) 
+Organization (O),Let's Encrypt 
+Not Before (Valid From),"March 13, 2024, 00:00:00Z "
+Not After (Valid To),"March 12, 2027, 23:59:59Z "
+Serial Number,0x5A00F212D8D4B480F3924157EAA20C14 
+Key Usage,"Digital Signature, Key Encipherment "
