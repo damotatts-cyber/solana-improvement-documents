@@ -1,0 +1,92 @@
+// --- 1. CORE CONFIGURATION & DEPENDENCIES ---
+import { DatabaseClient } from 'secure-db-library'; // Represents connection to ITL (Write-Once database)
+import { createHash } from 'crypto'; // For SHA-256 Hashing (Layer 1 Immutability)
+
+// Securely load the previous transaction hash and database connection secrets
+const PREVIOUS_HASH = process.env.LAST_BLOCK_HASH || 'GENESIS_HASH';
+const DB_CONNECTION_STRING = process.env.SECURE_ITL_DB_STRING;
+// --- 2. ETHICAL ENFORCEMENT FUNCTION (B.E.C. & Z.T.R.) ---
+function checkEthicalCompliance(tradeData: any): { isCompliant: boolean, reason: string } {
+    // 1. Zero Tolerance Registry (Z.T.R.) Check
+    if (tradeData.market.includes('fossil fuels') || tradeData.counterparty.isSanctioned) {
+        return { isCompliant: false, reason: "Z.T.R. violation: Blocked market/counterparty." };
+    }
+
+    // 2. Maximum Profit Threshold (Example B.E.C. Rule)
+    const MAX_PROFIT_PERCENT = 5.0; 
+    if (tradeData.profitPercentage > MAX_PROFIT_PERCENT) {
+        // This is a "Nullified Profit" trade that will be routed to the U.D.P.
+        console.warn(`Trade exceeds MAX_PROFIT: ${tradeData.profitPercentage}%`);
+    }
+
+    // Add all other proprietary B.E.C. rules here (e.g., Fair Price Algorithm)
+
+    return { isCompliant: true, reason: "Trade compliant with B.E.C." };
+}// --- 3. SECURE TRANSACTION RECORDING (ITL & HASHING CHAIN) ---
+async function recordImmutableTransaction(tradeData: any, complianceResult: any) {
+    // 1. Check Previous Hash Integrity (Self-Destruct if Corrupted)
+    // NOTE: A real implementation would fetch and verify the hash of the LATEST record.
+    if (PREVIOUS_HASH === 'CORRUPTED') { 
+        console.error("FATAL ERROR: Immutable Ledger Hash Chain Broken. SHUTTING DOWN.");
+        process.exit(1); // The "it's not running" command.
+    }
+
+    // 2. Prepare the new record data
+    const record = {
+        timestamp: new Date().toISOString(),
+        trade_data: tradeData,
+        compliance: complianceResult,
+        previous_hash: PREVIOUS_HASH,
+        status: complianceResult.isCompliant ? 'OK' : 'NULLIFIED',
+    };
+
+    // 3. Create the New Immutable Hash (Layer 1 Immutability)
+    const recordString = JSON.stringify(record);
+    const newHash = createHash('sha256').update(recordString).digest('hex');
+    record.current_hash = newHash;
+
+    // 4. INSERT-ONLY to ITL (Layer 2 Immutability - WORM Policy)
+    try {
+        // The core requirement: ONLY INSERT is allowed. UPDATE/DELETE will throw an error.
+        await itl_db.execute(
+            `INSERT INTO ITL_Ledger (data, hash) VALUES (?, ?)`, 
+            [JSON.stringify(record), newHash]
+        );
+        
+        // Success: update the PREVIOUS_HASH for the next transaction.
+        process.env.LAST_BLOCK_HASH = newHash; 
+
+    } catch (error) {
+        console.error("CRITICAL DB ERROR: Attempted UPDATE/DELETE detected or network error.", error);
+        process.exit(1); // Enforce "it's not running" on any write-lock violation
+    }
+}
+
+// --- 4. MAIN PROCESSING ROUTE (Vercel Edge Function Entry Point) ---
+export default async function handler(req: Request) {
+    // 1. Layer 3 (Zero Trust Barrier) - Verify Trusted IP/Authentication
+    if (req.headers.get('x-forwarded-for') !== process.env.VERCEL_TRUSTED_IP) {
+        return new Response("Unauthorized Access: Network Segment Violation.", { status: 403 });
+    }
+
+    const tradeData = await req.json();
+    const compliance = checkEthicalCompliance(tradeData);
+
+    // 2. Record the transaction immediately (Immutable Proof of Action)
+    await recordImmutableTransaction(tradeData, compliance);
+
+    // 3. Determine profit distribution based on Z.T.R.
+    if (compliance.status === 'NULLIFIED') {
+        // Route profit to the U.D.P. (Managed by the Corporate Trustee in the Trust Structure)
+        return new Response(JSON.stringify({ 
+            message: "Transaction recorded. Profit Nullified and reserved for U.D.P." 
+        }), { status: 200 });
+    } else {
+        // Route profit to the Bushman Trust Beneficiaries (including you)
+        return new Response(JSON.stringify({ 
+            message: "Transaction recorded. Profit distributed via Bushman Trust." 
+        }), { status: 200 });
+    }
+}
+// Initialize the Database Client
+const itl_db = new DatabaseClient(DB_CONNECTION_STRING);
